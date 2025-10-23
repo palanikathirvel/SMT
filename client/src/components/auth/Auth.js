@@ -29,7 +29,10 @@ const Auth = ({ location }) => {
         enrollmentNo: "",
         semester: "",
         department: "",
+        skills: [],
+        expertise: [],
     });
+    const [skillInput, setSkillInput] = useState("");
     const dispatch = useDispatch();
     const history = useHistory();
 
@@ -53,7 +56,10 @@ const Auth = ({ location }) => {
             enrollmentNo: "",
             semester: "",
             department: "",
+            skills: [],
+            expertise: [],
         });
+        setSkillInput("");
     };
 
     const handleToggle = () => {
@@ -67,6 +73,36 @@ const Auth = ({ location }) => {
         console.log(e.target.value);
         if (e.target.name === "semester" && e.target.value === "") return;
         setFields({ ...fields, [e.target.name]: e.target.value.trim() });
+    };
+
+    const addSkill = () => {
+        if (skillInput.trim()) {
+            const skillField = location.state === "Mentee" ? "skills" : "expertise";
+            const currentSkills = fields[skillField];
+            if (!currentSkills.includes(skillInput.trim())) {
+                setFields({ 
+                    ...fields, 
+                    [skillField]: [...currentSkills, skillInput.trim()] 
+                });
+            }
+            setSkillInput("");
+        }
+    };
+
+    const removeSkill = (skillToRemove) => {
+        const skillField = location.state === "Mentee" ? "skills" : "expertise";
+        const currentSkills = fields[skillField];
+        setFields({ 
+            ...fields, 
+            [skillField]: currentSkills.filter(skill => skill !== skillToRemove) 
+        });
+    };
+
+    const handleSkillKeyPress = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addSkill();
+        }
     };
 
     const handleSubmit = (e) => {
@@ -263,7 +299,55 @@ const Auth = ({ location }) => {
                                 >
                                     <option value="">Select department</option>
                                     <option value="Computer Science & Engineering">Computer Science & Engineering</option>
+                                    <option value="Electronics & Communication Engineering">Electronics & Communication Engineering</option>
+                                    <option value="Information Technology">Information Technology</option>
+                                    <option value="Electrical & Electronics Engineering">Electrical & Electronics Engineering</option>
+                                    <option value="Artificial Intelligence & Data Science">Artificial Intelligence & Data Science</option>
+                                    <option value="Mechanical Engineering">Mechanical Engineering</option>
+                                    <option value="Civil Engineering">Civil Engineering</option>
                                 </select>
+                            </div>
+                        )}
+                        {toggleLogin && (location.state === "Mentee" || location.state === "Mentor") && (
+                            <div className="flex flex-col mb-6">
+                                <label htmlFor="skills" className="mb-2 text-white">
+                                    {location.state === "Mentee" ? "Skills" : "Expertise"} (Press Enter to add)
+                                </label>
+                                <div className="flex space-x-2 mb-2">
+                                    <input
+                                        id="skills"
+                                        type="text"
+                                        value={skillInput}
+                                        onChange={(e) => setSkillInput(e.target.value)}
+                                        onKeyPress={handleSkillKeyPress}
+                                        placeholder={location.state === "Mentee" ? "e.g., JavaScript, React, Python" : "e.g., Web Development, AI, Data Science"}
+                                        className="flex-1 rounded-lg border-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={addSkill}
+                                        className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
+                                    {(location.state === "Mentee" ? fields.skills : fields.expertise).map((skill, index) => (
+                                        <span
+                                            key={index}
+                                            className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
+                                        >
+                                            {skill}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeSkill(skill)}
+                                                className="ml-1 text-blue-600 hover:text-blue-800"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
                         )}
                         <div className="flex flex-col mb-6">

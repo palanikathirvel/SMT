@@ -105,6 +105,26 @@ const MentorListModal = ({ isOpen, onClose }) => {
                                     <p className="text-xs text-blue-600">
                                         Current Students: {mentor.studentCount}
                                     </p>
+                                    {mentor.matchScore > 0 && (
+                                        <p className="text-xs text-green-600 font-semibold">
+                                            Match Score: {mentor.matchScore}/10
+                                        </p>
+                                    )}
+                                    {mentor.expertise && mentor.expertise.length > 0 && (
+                                        <div className="mt-1">
+                                            <p className="text-xs text-gray-500">Expertise:</p>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {mentor.expertise.slice(0, 3).map((skill, idx) => (
+                                                    <span key={idx} className="text-xs bg-gray-100 px-1 rounded">
+                                                        {skill}
+                                                    </span>
+                                                ))}
+                                                {mentor.expertise.length > 3 && (
+                                                    <span className="text-xs text-gray-400">+{mentor.expertise.length - 3} more</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

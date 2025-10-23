@@ -50,19 +50,3 @@ export const getChatSessions = (setSessions) => async (dispatch) => {
     }
 };
 
-export const updateUserSkills = (skills, onSuccess) => async (dispatch) => {
-    try {
-        const { data } = await api.updateSkills({ skills });
-        console.log("Update skills response:", data);
-
-        if (data && data.code === 200) {
-            showToast("success", "Skills updated successfully", 3000, toast.POSITION.TOP_RIGHT);
-            if (onSuccess) onSuccess();
-        } else {
-            showToast("error", data?.msg || "Failed to update skills", 10000, toast.POSITION.TOP_RIGHT);
-        }
-    } catch (error) {
-        console.error("Update skills error:", error);
-        showToast("error", "Network error while updating skills", 10000, toast.POSITION.TOP_RIGHT);
-    }
-};

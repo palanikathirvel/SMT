@@ -11,6 +11,7 @@ const Semester = require("../models/Semester");
 const roles = require("../utils/roles");
 const emailService = require("../services/email.service");
 const jwt = require("jsonwebtoken");
+const aiRecommendationService = require("../services/aiRecommendation.service");
 
 // including cloudinary configs
 require("../config/cloudinary");
@@ -87,6 +88,7 @@ module.exports = {
                 enrollmentNo,
                 semester,
                 department,
+                skills,
             } = req.body;
 
             if (!email || !password || !firstName || !semester || !enrollmentNo) {
@@ -106,6 +108,7 @@ module.exports = {
             student.enrollment_no = enrollmentNo;
             student.semester = semester;
             student.department = department;
+            student.skills = skills || [];
             student.isEmailVerified = true
             // const token = await jwt.sign(
             //     { _id: student._id.toString(), role: roles.Student },
@@ -138,14 +141,20 @@ module.exports = {
         try {
             let dashboardData = { user: req.user };
             
-            // If student doesn't have a mentor, show suggested mentors
+            // If student doesn't have a mentor, show AI-based suggested mentors
             if (!req.user.mentoredBy) {
-                const suggestedMentors = await Mentor.find({ isBanned: false })
-                    .select('firstname lastname department designation studentCount avatar')
-                    .sort({ studentCount: 1 })
-                    .limit(5);
+                const suggestedMentors = await aiRecommendationService.recommendMentors(
+                    req.user.skills, 
+                    { limit: 5, useCosineSimilarity: true }
+                );
+                
+                const aiContext = await aiRecommendationService.getAIRecommendationContext(
+                    req.user.skills, 
+                    suggestedMentors
+                );
                 
                 dashboardData.suggestedMentors = suggestedMentors;
+                dashboardData.aiRecommendationContext = aiContext;
             }
             
             response.success(res, "", dashboardData);
@@ -369,22 +378,15 @@ module.exports = {
     // get available mentors for student to request
     getAvailableMentors: async (req, res, next) => {
         try {
-            console.log('Getting available mentors...');
+            console.log('Getting available mentors using BFS...');
             
-            // First check total mentors
-            const totalMentors = await Mentor.countDocuments();
-            console.log('Total mentors in DB:', totalMentors);
+            // Use AI-based recommendations with cosine similarity
+            const mentors = await aiRecommendationService.recommendMentors(
+                req.user.skills, 
+                { limit: 20, useCosineSimilarity: true, includeGeneralMentors: true }
+            );
             
-            // Check banned mentors
-            const bannedMentors = await Mentor.countDocuments({ isBanned: true });
-            console.log('Banned mentors:', bannedMentors);
-            
-            const mentors = await Mentor.find({ isBanned: false })
-                .select('firstname lastname department designation studentCount avatar')
-                .sort({ studentCount: 1 });
-
-            console.log('Found available mentors:', mentors.length);
-            console.log('Mentors data:', mentors);
+            console.log('AI recommended mentors:', mentors.length);
             
             response.success(res, "", { mentors });
             next();
@@ -448,6 +450,39 @@ module.exports = {
                 .sort({ createdAt: -1 });
 
             response.success(res, "", { requests });
+            next();
+        } catch (err) {
+            console.log(err);
+            response.error(res);
+        }
+    },
+
+    // get AI-based mentor recommendations
+    getAIRecommendations: async (req, res, next) => {
+        try {
+            const { limit = 10, algorithm = 'cosine' } = req.query;
+            
+            const useCosineSimilarity = algorithm === 'cosine';
+            const mentors = await aiRecommendationService.recommendMentors(
+                req.user.skills, 
+                { 
+                    limit: parseInt(limit), 
+                    useCosineSimilarity,
+                    includeGeneralMentors: true 
+                }
+            );
+            
+            const context = await aiRecommendationService.getAIRecommendationContext(
+                req.user.skills, 
+                mentors
+            );
+            
+            response.success(res, "", { 
+                mentors, 
+                context,
+                algorithm: useCosineSimilarity ? 'Cosine Similarity' : 'Keyword Overlap',
+                studentSkills: req.user.skills || []
+            });
             next();
         } catch (err) {
             console.log(err);

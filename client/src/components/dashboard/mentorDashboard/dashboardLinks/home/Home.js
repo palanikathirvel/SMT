@@ -9,11 +9,13 @@ import ChartData from "./chartData/ChartData";
 import MentorListModal from "../../../../modal/MentorListModal";
 import MentorRequestsModal from "../../../../modal/MentorRequestsModal";
 import MentAiChatModal from "../../../../modal/MentAiChatModal";
-import SkillsModal from "../../../../modal/SkillsModal";
+
+import AIRecommendationsModal from "../../../../modal/AIRecommendationsModal";
 
 import InfoCards from "./InfoCards";
 import RecentActivities from "./recentActivities/RecentActivities";
 import UpcomingMeetings from "./UpcomingMeetings";
+import AIInsightsCard from "./AIInsightsCard";
 import { Roles } from "../../../../../utility";
 
 const Home = ({ name }) => {
@@ -31,10 +33,22 @@ const Home = ({ name }) => {
     const [showMentorModal, setShowMentorModal] = useState(false);
     const [showRequestsModal, setShowRequestsModal] = useState(false);
     const [showAiChatModal, setShowAiChatModal] = useState(false);
-    const [showSkillsModal, setShowSkillsModal] = useState(false);
+
+    const [showAIRecommendationsModal, setShowAIRecommendationsModal] = useState(false);
 
     useEffect(() => {
         dispatch(getStats(history, setStats));
+        
+        // Listen for AI recommendations modal trigger from MentAI
+        const handleOpenAIRecommendations = () => {
+            setShowAIRecommendationsModal(true);
+        };
+        
+        window.addEventListener('openAIRecommendations', handleOpenAIRecommendations);
+        
+        return () => {
+            window.removeEventListener('openAIRecommendations', handleOpenAIRecommendations);
+        };
     }, []);
     
     const handleMentorCardClick = () => {
@@ -91,27 +105,35 @@ const Home = ({ name }) => {
                         <h4 className="mb-3">Activities last 7 days</h4>
                         <RecentActivities />
                     </div>
+                    
+                    {/* AI Insights for Students */}
+                    {user?.role === Roles.STUDENT && (
+                        <AIInsightsCard userSkills={user?.skills || []} />
+                    )}
                 </div>
                 <div className="col-span-2 py-4 flex flex-col items-end justify-start h-full space-y-4">
                     {/* MentAI Chatbot Button */}
                     <button
                         onClick={() => setShowAiChatModal(true)}
-                        className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                        className="bg-gradient-to-r from-purple-500 to-blue-500 text-white px-6 py-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2 relative"
                     >
                         <span className="text-lg">🤖</span>
                         <span className="font-semibold">Chat with MentAI</span>
+                        <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                     </button>
                     
-                    {/* Skills Management Button (for students) */}
+                    {/* AI Recommendations Button (for students) */}
                     {user?.role === Roles.STUDENT && (
                         <button
-                            onClick={() => setShowSkillsModal(true)}
-                            className="bg-gradient-to-r from-green-500 to-teal-500 text-white px-6 py-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                            onClick={() => setShowAIRecommendationsModal(true)}
+                            className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-6 py-3 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                         >
-                            <span className="text-lg">🎨</span>
-                            <span className="font-semibold">Manage Skills</span>
+                            <span className="text-lg">🤖</span>
+                            <span className="font-semibold">AI Recommendations</span>
                         </button>
                     )}
+                    
+
                     
                     <UpcomingMeetings />
 
@@ -133,10 +155,11 @@ const Home = ({ name }) => {
                 onClose={() => setShowAiChatModal(false)}
             />
             
-            <SkillsModal 
-                isOpen={showSkillsModal}
-                onClose={() => setShowSkillsModal(false)}
-                currentSkills={[]}
+
+            
+            <AIRecommendationsModal 
+                isOpen={showAIRecommendationsModal}
+                onClose={() => setShowAIRecommendationsModal(false)}
             />
         </div>
     );

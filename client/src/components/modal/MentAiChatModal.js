@@ -1,27 +1,40 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { sendAiMessage, getChatHistory } from "../../actions/ai";
 import ModalOverlay from "./ModalOverlay";
 
 const MentAiChatModal = ({ isOpen, onClose }) => {
     const dispatch = useDispatch();
+    const authState = useSelector(state => state.auth || {});
+    const user = authState.user;
     const [messages, setMessages] = useState([]);
     const [inputMessage, setInputMessage] = useState("");
     const [loading, setLoading] = useState(false);
     const [sessionId, setSessionId] = useState(null);
     const [recommendedMentors, setRecommendedMentors] = useState([]);
     const messagesEndRef = useRef(null);
+    
+    // Get user skills based on role
+    const userSkills = user?.role === 'Student' ? user?.skills : user?.expertise;
 
     useEffect(() => {
         if (isOpen && !sessionId) {
-            // Start with welcome message
+            // Start with personalized welcome message
+            let welcomeMessage = `Hello${user?.firstname ? ` ${user.firstname}` : ''}! I'm MentAI, your AI assistant. `;
+            
+            if (userSkills && userSkills.length > 0) {
+                welcomeMessage += `I can see you have skills in ${userSkills.slice(0, 3).join(', ')}${userSkills.length > 3 ? ' and more' : ''}. I can help you find mentors based on your skills, answer questions about the mentoring system, and provide guidance. Try asking me to 'recommend mentors' for personalized suggestions!`;
+            } else {
+                welcomeMessage += "I can help you find mentors, answer questions about the mentoring system, and provide guidance. For personalized mentor recommendations, consider updating your profile with your skills and interests. How can I help you today?";
+            }
+            
             setMessages([{
                 role: 'assistant',
-                content: "Hello! I'm MentAI, your AI assistant. I can help you find mentors based on your skills, answer questions about the mentoring system, and provide guidance. How can I help you today?",
+                content: welcomeMessage,
                 timestamp: new Date()
             }]);
         }
-    }, [isOpen, sessionId]);
+    }, [isOpen, sessionId, user, userSkills]);
 
     useEffect(() => {
         scrollToBottom();
@@ -78,19 +91,42 @@ const MentAiChatModal = ({ isOpen, onClose }) => {
         <ModalOverlay>
             <div className="bg-white rounded-lg w-full max-w-2xl h-[600px] flex flex-col shadow-xl">
                 {/* Header */}
-                <div className="flex justify-between items-center p-4 border-b bg-blue-500 text-white rounded-t-lg">
-                    <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
-                            <span className="text-sm font-bold">AI</span>
+                <div className="bg-blue-500 text-white rounded-t-lg">
+                    <div className="flex justify-between items-center p-4 border-b border-blue-400">
+                        <div className="flex items-center space-x-2">
+                            <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                                <span className="text-sm font-bold">AI</span>
+                            </div>
+                            <h2 className="text-lg font-bold">MentAI Assistant</h2>
                         </div>
-                        <h2 className="text-lg font-bold">MentAI Assistant</h2>
+                        <button
+                            onClick={onClose}
+                            className="text-white hover:text-gray-200 text-xl"
+                        >
+                            ✕
+                        </button>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="text-white hover:text-gray-200 text-xl"
-                    >
-                        ✕
-                    </button>
+                    
+                    {/* User Skills Display */}
+                    {user && userSkills && userSkills.length > 0 && (
+                        <div className="px-4 pb-3">
+                            <div className="text-xs text-blue-100 mb-1">
+                                Your {user.role === 'Student' ? 'Skills' : 'Expertise'}:
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                                {userSkills.slice(0, 5).map((skill, index) => (
+                                    <span key={index} className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">
+                                        {skill}
+                                    </span>
+                                ))}
+                                {userSkills.length > 5 && (
+                                    <span className="text-xs bg-white bg-opacity-20 px-2 py-1 rounded-full">
+                                        +{userSkills.length - 5} more
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Messages */}
@@ -132,19 +168,42 @@ const MentAiChatModal = ({ isOpen, onClose }) => {
 
                 {/* Recommended Mentors */}
                 {recommendedMentors.length > 0 && (
-                    <div className="border-t p-4 bg-gray-50">
-                        <h4 className="font-semibold mb-2">Recommended Mentors:</h4>
-                        <div className="space-y-2 max-h-32 overflow-y-auto">
+                    <div className="border-t p-4 bg-gradient-to-r from-blue-50 to-indigo-50">
+                        <h4 className="font-semibold mb-2 text-blue-800">🤖 AI Recommended Mentors:</h4>
+                        <div className="space-y-2 max-h-40 overflow-y-auto">
                             {recommendedMentors.map((mentor) => (
-                                <div key={mentor._id} className="flex items-center space-x-2 text-sm">
-                                    <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
-                                        {mentor.firstname?.charAt(0)}{mentor.lastname?.charAt(0)}
+                                <div key={mentor._id} className="flex items-center justify-between p-2 bg-white rounded-lg shadow-sm">
+                                    <div className="flex items-center space-x-2">
+                                        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                            {mentor.firstname?.charAt(0)}{mentor.lastname?.charAt(0)}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium text-gray-800">{mentor.firstname} {mentor.lastname}</span>
+                                            <p className="text-xs text-gray-600">{mentor.department}</p>
+                                            {mentor.expertise && (
+                                                <p className="text-xs text-blue-600">
+                                                    {mentor.expertise.slice(0, 2).join(', ')}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <span className="font-medium">{mentor.firstname} {mentor.lastname}</span>
-                                    <span className="text-gray-600">- {mentor.department}</span>
+                                    {mentor.matchScore && (
+                                        <div className="text-right">
+                                            <div className="text-xs font-bold text-green-600">
+                                                {mentor.matchScore}/10
+                                            </div>
+                                            <div className="text-xs text-gray-500">Match</div>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
+                        <button 
+                            onClick={() => window.dispatchEvent(new CustomEvent('openAIRecommendations'))}
+                            className="mt-2 w-full text-xs bg-blue-500 text-white py-1 px-2 rounded hover:bg-blue-600 transition-colors"
+                        >
+                            View All AI Recommendations
+                        </button>
                     </div>
                 )}
 
@@ -169,7 +228,10 @@ const MentAiChatModal = ({ isOpen, onClose }) => {
                         </button>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                        Try: "Recommend mentors for JavaScript and React skills"
+                        {user && userSkills && userSkills.length > 0 
+                            ? "Try: 'Recommend mentors' or 'Find mentors for machine learning'"
+                            : "Try: 'Recommend mentors for JavaScript and React' or update your profile skills"
+                        }
                     </p>
                 </div>
             </div>

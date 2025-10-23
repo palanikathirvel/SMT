@@ -99,4 +99,12 @@ router.get(
     studentController.getMyMentorRequests
 );
 
+// get AI-based mentor recommendations
+router.get(
+    "/ai-recommendations",
+    Auth,
+    Authorize(Role.Student),
+    studentController.getAIRecommendations
+);
+
 module.exports = router;

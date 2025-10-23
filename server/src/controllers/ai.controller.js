@@ -33,21 +33,49 @@ module.exports = {
             let recommendedMentors = [];
 
             if (lowerMessage.includes('mentor') && (lowerMessage.includes('recommend') || lowerMessage.includes('suggest'))) {
-                // Extract skills from message or use user's skills
-                const skillsMatch = message.match(/skills?:?\s*([^.!?]+)/i);
-                let skills = [];
+                // Get user's current skills from database
+                let userSkills = [];
+                let userProfile = {};
                 
-                if (skillsMatch) {
-                    skills = skillsMatch[1].split(',').map(s => s.trim());
-                } else if (userType === 'Student' && req.user.skills) {
-                    skills = req.user.skills;
-                }
-
-                if (skills.length > 0) {
-                    recommendedMentors = await aiService.findMentorsBySkills(skills);
-                    aiResponse = `Based on your skills (${skills.join(', ')}), I found ${recommendedMentors.length} mentors who might be a good match for you. Check the recommendations below!`;
+                if (userType === 'Student') {
+                    const student = await Student.findById(userId).select('skills department semester firstname lastname');
+                    userSkills = student?.skills || [];
+                    userProfile = {
+                        skills: userSkills,
+                        department: student?.department,
+                        semester: student?.semester,
+                        name: `${student?.firstname} ${student?.lastname}`
+                    };
                 } else {
-                    aiResponse = "To recommend the best mentors for you, please tell me about your skills or interests. For example: 'I'm interested in JavaScript, React, and web development'";
+                    const mentor = await Mentor.findById(userId).select('expertise department designation firstname lastname');
+                    userSkills = mentor?.expertise || [];
+                    userProfile = {
+                        skills: userSkills,
+                        department: mentor?.department,
+                        designation: mentor?.designation,
+                        name: `${mentor?.firstname} ${mentor?.lastname}`
+                    };
+                }
+                
+                // Extract additional skills from message if mentioned
+                const skillsMatch = message.match(/(?:skills?|interested in|looking for):?\s*([^.!?]+)/i);
+                let messageSkills = [];
+                if (skillsMatch) {
+                    messageSkills = skillsMatch[1].split(/[,&and]+/).map(s => s.trim()).filter(s => s.length > 0);
+                }
+                
+                // Combine user skills with message skills
+                const allSkills = [...new Set([...userSkills, ...messageSkills])];
+
+                if (allSkills.length > 0) {
+                    recommendedMentors = await aiService.findMentorsBySkills(allSkills);
+                    
+                    // Generate smart AI recommendation
+                    aiResponse = await aiService.generateSmartRecommendation(userProfile, recommendedMentors, allSkills);
+                } else {
+                    aiResponse = userType === 'Student' 
+                        ? "I notice you haven't added any skills to your profile yet. Please update your skills in your profile settings to get personalized mentor recommendations, or tell me what skills you're interested in learning!"
+                        : "I can help you find mentors based on specific skills. What skills or areas of expertise are you looking for in a mentor?";
                 }
             } else {
                 // Generate AI response
@@ -146,44 +174,5 @@ module.exports = {
         }
     },
 
-    // Update user skills (for better recommendations)
-    updateSkills: async (req, res, next) => {
-        try {
-            const { skills } = req.body;
-            const userId = req.user._id;
-            const userType = req.user.role === roles.Student ? 'Student' : 'Mentor';
 
-            console.log('Updating skills for user:', userId, 'Type:', userType, 'Skills:', skills);
-
-            if (!skills || !Array.isArray(skills)) {
-                return response.badrequest(res, "Skills array is required", {});
-            }
-
-            let updatedUser;
-            if (userType === 'Student') {
-                updatedUser = await Student.findByIdAndUpdate(
-                    userId, 
-                    { skills }, 
-                    { new: true, runValidators: true }
-                );
-            } else {
-                updatedUser = await Mentor.findByIdAndUpdate(
-                    userId, 
-                    { expertise: skills }, 
-                    { new: true, runValidators: true }
-                );
-            }
-
-            if (!updatedUser) {
-                return response.error(res, "User not found", {});
-            }
-
-            console.log('Skills updated successfully for user:', userId);
-            response.success(res, "Skills updated successfully", { skills });
-            next();
-        } catch (err) {
-            console.error('Error updating skills:', err);
-            response.error(res, "Failed to update skills", {});
-        }
-    }
 };

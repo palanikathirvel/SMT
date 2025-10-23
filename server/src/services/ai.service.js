@@ -11,34 +11,74 @@ class AIService {
 
     async generateResponse(message, context = '') {
         try {
-            // If no API key, use simple rule-based responses
-            if (!this.apiKey) {
-                return this.getRuleBasedResponse(message, context);
+            // Try OpenAI first if available
+            if (process.env.OPENAI_API_KEY) {
+                return await this.getOpenAIResponse(message, context);
             }
-
-            const response = await axios.post(
-                `${this.baseURL}${this.model}`,
-                {
-                    inputs: `${context}\nUser: ${message}\nMentAI:`,
-                    parameters: {
-                        max_length: 150,
-                        temperature: 0.7,
-                        do_sample: true
+            
+            // Fallback to Hugging Face
+            if (this.apiKey) {
+                const response = await axios.post(
+                    `${this.baseURL}${this.model}`,
+                    {
+                        inputs: `${context}\nUser: ${message}\nMentAI:`,
+                        parameters: {
+                            max_length: 150,
+                            temperature: 0.7,
+                            do_sample: true
+                        }
+                    },
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${this.apiKey}`,
+                            'Content-Type': 'application/json'
+                        }
                     }
+                );
+
+                return response.data[0]?.generated_text?.split('MentAI:')[1]?.trim() || 
+                       this.getRuleBasedResponse(message, context);
+            }
+            
+            return this.getRuleBasedResponse(message, context);
+        } catch (error) {
+            console.error('AI API Error:', error.message);
+            return this.getRuleBasedResponse(message, context);
+        }
+    }
+
+    async getOpenAIResponse(message, context) {
+        try {
+            const response = await axios.post(
+                'https://api.openai.com/v1/chat/completions',
+                {
+                    model: process.env.OPENAI_MODEL || 'gpt-3.5-turbo',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are MentAI, an AI assistant for a student mentoring system. ${context} Provide helpful, concise responses about mentoring, learning, and academic guidance.`
+                        },
+                        {
+                            role: 'user',
+                            content: message
+                        }
+                    ],
+                    max_tokens: 150,
+                    temperature: 0.7
                 },
                 {
                     headers: {
-                        'Authorization': `Bearer ${this.apiKey}`,
+                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                         'Content-Type': 'application/json'
                     }
                 }
             );
 
-            return response.data[0]?.generated_text?.split('MentAI:')[1]?.trim() || 
+            return response.data.choices[0]?.message?.content?.trim() || 
                    this.getRuleBasedResponse(message, context);
         } catch (error) {
-            console.error('AI API Error:', error.message);
-            return this.getRuleBasedResponse(message, context);
+            console.error('OpenAI API Error:', error.message);
+            throw error;
         }
     }
 
@@ -73,21 +113,57 @@ class AIService {
 
     async findMentorsBySkills(skills) {
         try {
-            const skillsArray = Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim());
-            
-            const mentors = await Mentor.find({
-                isBanned: false,
-                $or: [
-                    { expertise: { $in: skillsArray.map(skill => new RegExp(skill, 'i')) } },
-                    { specialization: { $in: skillsArray.map(skill => new RegExp(skill, 'i')) } },
-                    { department: { $in: skillsArray.map(skill => new RegExp(skill, 'i')) } }
-                ]
-            }).select('firstname lastname department designation expertise specialization studentCount avatar');
-
-            return mentors;
+            const aiRecommendationService = require('./aiRecommendation.service');
+            return await aiRecommendationService.recommendMentors(skills, { limit: 5 });
         } catch (error) {
             console.error('Error finding mentors by skills:', error);
             return [];
+        }
+    }
+
+
+
+    async generateSmartRecommendation(userProfile, mentors, skills = []) {
+        if (!process.env.OPENAI_API_KEY) {
+            return this.generateBasicRecommendation(userProfile, mentors, skills);
+        }
+
+        try {
+            const userSkills = skills.length > 0 ? skills : (userProfile.skills || []);
+            const prompt = `Based on this user profile:
+Name: ${userProfile.name}
+Skills: ${userSkills.join(', ') || 'None specified'}
+Department: ${userProfile.department}
+${userProfile.semester ? `Semester: ${userProfile.semester}` : ''}
+${userProfile.designation ? `Designation: ${userProfile.designation}` : ''}
+
+And these recommended mentors:
+${mentors.slice(0, 3).map(m => `- ${m.firstname} ${m.lastname} (${m.department}, Expertise: ${m.expertise?.join(', ') || 'General'}, Match Score: ${m.matchScore}/10)`).join('\n')}
+
+Provide a brief, personalized recommendation (2-3 sentences) explaining why these mentors are good matches and how they can help.`;
+
+            const response = await this.getOpenAIResponse(prompt, 'You are an AI mentor matching expert. Be concise and helpful.');
+            return response;
+        } catch (error) {
+            console.error('Smart recommendation error:', error);
+            return this.generateBasicRecommendation(userProfile, mentors, skills);
+        }
+    }
+
+    generateBasicRecommendation(userProfile, mentors, skills = []) {
+        const userSkills = skills.length > 0 ? skills : (userProfile.skills || []);
+        
+        if (userSkills.length === 0) {
+            return "I recommend updating your profile with your skills and interests to get personalized mentor matches. These mentors can help you explore different areas and guide your learning journey.";
+        }
+        
+        const topSkills = userSkills.slice(0, 3).join(', ');
+        const matchCount = mentors.filter(m => m.matchScore > 5).length;
+        
+        if (matchCount > 0) {
+            return `Great! I found ${matchCount} mentors with strong expertise in your areas of interest (${topSkills}). These mentors have relevant experience and can provide valuable guidance for your learning goals.`;
+        } else {
+            return `Based on your skills in ${topSkills}, I've found mentors who can help you develop in related areas and expand your knowledge. They bring diverse expertise that complements your current skillset.`;
         }
     }
 
@@ -96,18 +172,22 @@ class AIService {
             let context = "You are MentAI, an AI assistant for a student mentoring system. ";
             
             if (userType === 'Student') {
-                const student = await Student.findById(userId);
-                context += `The user is a student named ${student.firstname} ${student.lastname} `;
-                context += `studying ${student.department} in semester ${student.semester}. `;
-                if (student.skills && student.skills.length > 0) {
-                    context += `Their skills include: ${student.skills.join(', ')}. `;
+                const student = await Student.findById(userId).select('firstname lastname department semester skills');
+                if (student) {
+                    context += `The user is a student named ${student.firstname} ${student.lastname} `;
+                    context += `studying ${student.department} in semester ${student.semester}. `;
+                    if (student.skills && student.skills.length > 0) {
+                        context += `Their skills include: ${student.skills.join(', ')}. `;
+                    }
                 }
             } else if (userType === 'Mentor') {
-                const mentor = await Mentor.findById(userId);
-                context += `The user is a mentor named ${mentor.firstname} ${mentor.lastname} `;
-                context += `from ${mentor.department} department with designation ${mentor.designation}. `;
-                if (mentor.expertise && mentor.expertise.length > 0) {
-                    context += `Their expertise includes: ${mentor.expertise.join(', ')}. `;
+                const mentor = await Mentor.findById(userId).select('firstname lastname department designation expertise');
+                if (mentor) {
+                    context += `The user is a mentor named ${mentor.firstname} ${mentor.lastname} `;
+                    context += `from ${mentor.department} department with designation ${mentor.designation}. `;
+                    if (mentor.expertise && mentor.expertise.length > 0) {
+                        context += `Their expertise includes: ${mentor.expertise.join(', ')}. `;
+                    }
                 }
             }
             

@@ -20,6 +20,7 @@
     "express-rate-limit": "^6.3.0",
     "hbs": "^4.2.0",
     "jsonwebtoken": "^8.5.1",
+    "ml-distance": "^4.0.1",
     "mongoose": "^5.13.8",
     "morgan": "^1.10.0",
     "multer": "^1.4.3",

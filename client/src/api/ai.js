@@ -15,7 +15,3 @@ export const getChatSessions = () =>
         return error.response;
     });
 
-export const updateSkills = (fields) =>
-    API.post("/ai/skills", fields).catch((error) => {
-        return error.response;
-    });

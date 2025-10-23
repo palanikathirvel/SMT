@@ -83,6 +83,7 @@ module.exports = {
                 lastName,
                 middleName,
                 department,
+                expertise,
             } = req.body;
 
             if (!email || !password || !confirmPassword || !firstName) {
@@ -100,6 +101,7 @@ module.exports = {
             mentor.middlename = middleName ? middleName : "";
             mentor.lastname = lastName ? lastName : "";
             mentor.department = department;
+            mentor.expertise = expertise || [];
             mentor.isEmailVerified = true
             // const token = await jwt.sign(
             //     { _id: mentor._id.toString(), role: roles.Mentor },

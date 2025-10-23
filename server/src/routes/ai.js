@@ -32,13 +32,6 @@ router.get(
     aiController.getChatSessions
 );
 
-// Update user skills for better recommendations
-router.post(
-    "/skills",
-    Auth,
-    Authorize([Role.Student, Role.Mentor]),
-    aiController.updateSkills,
-    Logger(events.SKILLS_UPDATED)
-);
+
 
 module.exports = router;
